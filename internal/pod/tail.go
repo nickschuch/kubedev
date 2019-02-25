@@ -1,13 +1,12 @@
 package pod
 
 import (
-	"bufio"
 	"io"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/nickschuch/kubedev/internal/log"
+	"github.com/pkg/errors"
 )
 
 func Tail(w io.Writer, client *kubernetes.Clientset, namespace, name, container string) error {
@@ -22,14 +21,10 @@ func Tail(w io.Writer, client *kubernetes.Clientset, namespace, name, container 
 	}
 	defer body.Close()
 
-	// Start reading the body and send each line to clients.
-	reader := bufio.NewReader(body)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			continue
-		}
-
-		log.Info(name, string(line))
+	_, err = io.Copy(w, body)
+	if err != nil {
+		return errors.Wrap(err, "failed to copy logs")
 	}
+
+	return nil
 }

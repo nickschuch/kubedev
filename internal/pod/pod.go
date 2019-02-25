@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func Run(client *kubernetes.Clientset, namespace string, labels map[string]string, params Params, mounts []Mount) error {
+func Run(client *kubernetes.Clientset, namespace, name string, params Params, mounts map[string]Mount) error {
 	container := corev1.Container{
 		Name:    ContainerName,
 		Image:   params.Image,
@@ -15,18 +15,20 @@ func Run(client *kubernetes.Clientset, namespace string, labels map[string]strin
 		Command: params.Command,
 	}
 
-	for _, mount := range mounts {
+	for mountName, mountValue := range mounts {
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-			Name:      mount.Name,
-			MountPath: mount.Target,
+			Name:      mountName,
+			MountPath: mountValue.Target,
 		})
 	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      params.Name,
-			Labels:    labels,
+			Name:      name,
+			Labels: map[string]string{
+				ContainerLabel: name,
+			},
 		},
 		Spec: corev1.PodSpec{
 			Containers:         []corev1.Container{container},
@@ -35,12 +37,12 @@ func Run(client *kubernetes.Clientset, namespace string, labels map[string]strin
 		},
 	}
 
-	for _, mount := range mounts {
+	for mountName, mountValue := range mounts {
 		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
-			Name: mount.Name,
+			Name: mountName,
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
-					Path: mount.Source,
+					Path: mountValue.Source,
 				},
 			},
 		})

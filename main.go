@@ -4,18 +4,21 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
-	"github.com/nickschuch/kubedev/internal/config"
-	"github.com/nickschuch/kubedev/internal/log"
-	"github.com/nickschuch/kubedev/internal/pod"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nickschuch/kubedev/internal/config"
+	"github.com/nickschuch/kubedev/internal/log"
+	"github.com/nickschuch/kubedev/internal/pod"
 )
 
 var (
 	cmdFile   = kingpin.Flag("file", "File to load").Default("kubedev.yml").String()
+	cmdFilter = kingpin.Flag("filter", "Filter by program name eg. app1,app2").String()
 	cmdConfig = kingpin.Arg("kubeconfig", "Path to the Kubeconfig file").Envar("KUBECONFIG").String()
 )
 
@@ -38,52 +41,66 @@ func main() {
 	}
 
 	// This workgroup is for adding Pods to our execution.
-	for _, params := range file.Pods {
-		go func(params pod.Params) {
-			log.Infoln(params.Name, "Starting")
+	for name, params := range file.Pods {
+		if filter(*cmdFilter, name) {
+			continue
+		}
 
-			err := pod.Run(kubeclient, file.Namespace, file.Labels, params, file.Mounts)
+		go func(name string, params pod.Params) {
+			log.Infoln(name, "Starting")
+
+			err := pod.Run(kubeclient, file.Namespace, name, params, file.Mounts)
 			if err != nil {
-				log.Error(params.Name, "Pod run failed:", err)
+				log.Error(name, "Pod run failed:", err)
 			}
 
-			log.Infoln(params.Name, "Waiting to become running")
+			log.Infoln(name, "Waiting to become running")
 
-			err = pod.Wait(kubeclient, file.Namespace, params.Name)
+			err = pod.Wait(kubeclient, file.Namespace, name)
 			if err != nil {
-				log.Error(params.Name, "Pod wait failed:", err)
+				log.Error(name, "Pod wait failed:", err)
 			}
 
-			log.Infoln(params.Name, "Starting log stream")
+			log.Infoln(name, "Starting log stream")
 
-			err = pod.Tail(os.Stdout, kubeclient, file.Namespace, params.Name, pod.ContainerName)
+			err = pod.Tail(os.Stdout, kubeclient, file.Namespace, name, pod.ContainerName)
 			if err != nil {
-				log.Error(params.Name, "Pod log stream failed:", err)
+				log.Error(name, "Pod log stream failed:", err)
 			}
-		}(params)
+		}(name, params)
 	}
 
 	signalChan := make(chan os.Signal, 1)
-	cleanupDone := make(chan struct{})
-
 	signal.Notify(signalChan, os.Interrupt)
+	<-signalChan
 
-	go func() {
-		<-signalChan
+	fmt.Println("Received an interrupt, terminating Pods...")
 
-		fmt.Println("Received an interrupt, terminating Pods...")
-
-		for _, pod := range file.Pods {
-			log.Infoln(pod.Name, "Terminating")
-
-			err := kubeclient.CoreV1().Pods(file.Namespace).Delete(pod.Name, &metav1.DeleteOptions{})
-			if err != nil {
-				log.Error(pod.Name, "Failed to terminate Pod:", err)
-			}
+	for name := range file.Pods {
+		if filter(*cmdFilter, name) {
+			continue
 		}
 
-		close(cleanupDone)
-	}()
+		log.Infoln(name, "Terminating")
 
-	<-cleanupDone
+		err := kubeclient.CoreV1().Pods(file.Namespace).Delete(name, &metav1.DeleteOptions{})
+		if err != nil {
+			log.Error(name, "Failed to terminate Pod:", err)
+		}
+	}
+}
+
+func filter(list, name string) bool {
+	if list == "" {
+		return false
+	}
+
+	// Can we find the application in the list.
+	for _, a := range strings.Split(list, ",") {
+		if a == name {
+			return false
+		}
+	}
+
+	return true
 }
