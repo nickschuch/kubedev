@@ -26,6 +26,7 @@ func Run(client *kubernetes.Clientset, namespace, name string, params Params, mo
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
+			Annotations: params.Annotations,
 			Labels: map[string]string{
 				ContainerLabel: name,
 			},

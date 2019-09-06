@@ -2,41 +2,21 @@ package log
 
 import (
 	"fmt"
-	"strconv"
 
-	"github.com/mgutz/ansi"
+	"github.com/nickschuch/kubedev/internal/colorpicker"
 )
 
-var matched = map[string]string{}
-
-func init() {
-	matched = make(map[string]string)
-}
-
+// Infoln wraps fmt.Println with color.
 func Infoln(name, message string) {
-	fmt.Println(wrap(name), message)
+	fmt.Println(colorpicker.Wrap(name), message)
 }
 
+// Info wraps fmt.Printf with color.
 func Info(name, message string) {
-	fmt.Printf("%s %s", wrap(name), message)
+	fmt.Printf("%s %s", colorpicker.Wrap(name), message)
 }
 
+// Error wraps fmt.Println with color and supports errors.
 func Error(name, message string, err error) {
-	fmt.Println(wrap(name), message, err)
-}
-
-func wrap(in string) string {
-	if val, ok := matched[in]; ok {
-		return ansi.Color(in, val)
-	}
-
-	// Ensure that we don't go over 256.
-	if len(matched) > 256 {
-		return ansi.Color(in, "default")
-	}
-
-	// Save it for later.
-	matched[in] = strconv.Itoa(len(matched) + 1)
-
-	return ansi.Color(in, matched[in])
+	fmt.Println(colorpicker.Wrap(name), message, err)
 }

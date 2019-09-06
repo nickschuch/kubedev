@@ -8,10 +8,11 @@ const (
 )
 
 type Params struct {
-	Image          string          `yaml:"image"`
-	ServiceAccount string          `yaml:"serviceAccount"`
-	Env            []corev1.EnvVar `yaml:"env"`
-	Command        []string        `yaml:"command"`
+	Annotations    map[string]string `yaml:"annotations"` 
+	Image          string            `yaml:"image"`
+	ServiceAccount string            `yaml:"serviceAccount"`
+	Env            []corev1.EnvVar   `yaml:"env"`
+	Command        []string          `yaml:"command"`
 }
 
 type Mount struct {
